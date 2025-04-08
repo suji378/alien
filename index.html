@@ -2,120 +2,141 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>엑셀 파일 조회 및 필터링 페이지</title>
-  <!-- SheetJS 라이브러리 로드 -->
-  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <title>자료 조회 결과</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-    }
-    input[type="file"],
-    input[type="text"] {
-      margin-bottom: 20px;
-      padding: 8px;
-      font-size: 16px;
-      width: 100%;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-      background-color: #fff;
-    }
+    body { font-family: Arial; padding: 20px; }
+    input[type="file"], input[type="text"], select { margin: 10px 10px 10px 0; padding: 5px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; table-layout: auto; }
     th, td {
-      border: 1px solid #ddd;
-      padding: 2px;       /* 패딩을 줄여서 높이를 낮춤 */
+      border: 1px solid #ccc;
+      padding: 8px;
       text-align: left;
-      height: 20px;       /* 셀의 높이를 20px로 지정 */
-      line-height: 20px;  /* 텍스트 줄 높이도 20px로 설정 */
+      vertical-align: top;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    th {
-      background-color: #f2f2f2;
-    }
-    tr:nth-child(even) {
+    td:hover {
+      white-space: normal;
       background-color: #f9f9f9;
+      position: relative;
+      z-index: 1;
     }
+    td[title]::after {
+      content: attr(title);
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      top: 100%;
+      left: 0;
+      white-space: pre-wrap;
+      max-width: 400px;
+      display: none;
+    }
+    td:hover[title]::after {
+      display: block;
+    }
+    th { background-color: #f4f4f4; }
+    #table-container { max-height: 600px; overflow: auto; }
   </style>
 </head>
 <body>
-  <h1>엑셀 파일 조회 및 필터링 페이지</h1>
-  <!-- 엑셀 파일 선택 -->
-  <input type="file" id="excelFile" accept=".xlsx, .xls">
-  <!-- 필터링 입력창 -->
-  <input type="text" id="searchInput" placeholder="검색어를 입력해봐" onkeyup="filterData()">
-  <!-- 데이터 출력 테이블 -->
-  <table id="excelTable">
-    <thead id="tableHead"></thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <h2 id="title">자료 조회 결과</h2>
+  <input type="file" id="file-input" accept=".csv,.xlsx" />
+  <input type="text" id="filter-input" placeholder="검색어 입력" />
+  <select id="filter-jg">
+    <option value="">정관 전체</option>
+    <option value="O">정관 O</option>
+    <option value="X">정관 X</option>
+  </select>
+  <select id="filter-bs">
+    <option value="">사업결산보고서 전체</option>
+    <option value="O">사업결산보고서 O</option>
+    <option value="X">사업결산보고서 X</option>
+  </select>
+  <select id="filter-is">
+    <option value="">이사회활동 전체</option>
+    <option value="O">이사회활동 O</option>
+    <option value="X">이사회활동 X</option>
+  </select>
+  <div id="table-container"></div>
 
   <script>
-    let excelData = []; // 엑셀 파일에서 가져온 데이터를 저장
+    const fileInput = document.getElementById('file-input');
+    const filterInput = document.getElementById('filter-input');
+    const filterJg = document.getElementById('filter-jg');
+    const filterBs = document.getElementById('filter-bs');
+    const filterIs = document.getElementById('filter-is');
+    const tableContainer = document.getElementById('table-container');
+    const titleElement = document.getElementById('title');
+    let allData = [];
+    let headers = [];
 
-    // 파일 선택 이벤트 처리
-    document.getElementById('excelFile').addEventListener('change', handleFile, false);
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    titleElement.textContent = `자료 조회 결과_${yyyy}.${mm}.${dd}`;
 
-    function handleFile(e) {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
       const reader = new FileReader();
-      reader.onload = function(event) {
+      reader.onload = function (event) {
         const data = new Uint8Array(event.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        // 첫 번째 시트를 사용 (여러 시트가 있으면 상황에 맞게 수정)
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        // 엑셀 시트를 JSON 형태로 변환 (빈 셀은 빈 문자열로 처리)
-        excelData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-        renderTable(excelData);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        headers = Object.keys(jsonData[0] || {});
+        allData = jsonData;
+        applyFilters();
       };
-      reader.readAsArrayBuffer(files[0]);
+      reader.readAsArrayBuffer(file);
+    });
+
+    filterInput.addEventListener('input', applyFilters);
+    filterJg.addEventListener('change', applyFilters);
+    filterBs.addEventListener('change', applyFilters);
+    filterIs.addEventListener('change', applyFilters);
+
+    function applyFilters() {
+      const keyword = filterInput.value.toLowerCase();
+      const jgFilter = filterJg.value;
+      const bsFilter = filterBs.value;
+      const isFilter = filterIs.value;
+
+      const filtered = allData.filter(row => {
+        const matchKeyword = Object.values(row).some(val => String(val).toLowerCase().includes(keyword));
+        const matchJg = jgFilter ? String(row['정관']).toUpperCase() === jgFilter : true;
+        const matchBs = bsFilter ? String(row['사업결산보고서']).toUpperCase() === bsFilter : true;
+        const matchIs = isFilter ? String(row['이사회활동']).toUpperCase() === isFilter : true;
+        return matchKeyword && matchJg && matchBs && matchIs;
+      });
+      renderTable(filtered);
     }
 
-    // 데이터를 HTML 테이블에 렌더링하는 함수
     function renderTable(data) {
-      const tableHead = document.getElementById('tableHead');
-      const tableBody = document.getElementById('tableBody');
-      tableHead.innerHTML = '';
-      tableBody.innerHTML = '';
-
-      if (data.length === 0) return;
-
-      // 테이블 헤더 생성 (모든 키를 사용하여 생성함)
-      const headerRow = document.createElement('tr');
-      Object.keys(data[0]).forEach(key => {
-        const th = document.createElement('th');
-        th.textContent = key;
-        headerRow.appendChild(th);
-      });
-      tableHead.appendChild(headerRow);
-
-      // 데이터 행 생성
-      data.forEach(rowData => {
-        const row = document.createElement('tr');
-        Object.keys(data[0]).forEach(key => {
-          const td = document.createElement('td');
-          td.textContent = rowData[key];
-          row.appendChild(td);
+      if (!data.length) {
+        tableContainer.innerHTML = '<p>데이터 없음</p>';
+        return;
+      }
+      let html = `<p><strong>총 ${data.length}건</strong></p>`;
+      html += '<table><thead><tr><th>순번</th>';
+      headers.forEach(h => { html += `<th>${h}</th>`; });
+      html += '</tr></thead><tbody>';
+      data.forEach((row, index) => {
+        html += '<tr>';
+        html += `<td>${index + 1}</td>`;
+        headers.forEach(h => {
+          const value = row[h] ?? '';
+          html += `<td title="${value}">${value}</td>`;
         });
-        tableBody.appendChild(row);
+        html += '</tr>';
       });
-    }
-
-    // 검색어에 따른 데이터 필터링 함수
-    function filterData() {
-      const query = document.getElementById('searchInput').value.toLowerCase();
-      const filteredData = excelData.filter(row => {
-        return Object.values(row).some(val =>
-          String(val).toLowerCase().includes(query)
-        );
-      });
-      renderTable(filteredData);
+      html += '</tbody></table>';
+      tableContainer.innerHTML = html;
     }
   </script>
 </body>
