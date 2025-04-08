@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>엑셀 파일 조회 및 필터링 페이지</title>
+  <!-- SheetJS 라이브러리 로드 -->
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    input[type="file"],
+    input[type="text"] {
+      margin-bottom: 20px;
+      padding: 8px;
+      font-size: 16px;
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background-color: #fff;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 2px;       /* 패딩을 줄여서 높이를 낮춤 */
+      text-align: left;
+      height: 20px;       /* 셀의 높이를 20px로 지정 */
+      line-height: 20px;  /* 텍스트 줄 높이도 20px로 설정 */
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <h1>엑셀 파일 조회 및 필터링 페이지</h1>
+  <!-- 엑셀 파일 선택 -->
+  <input type="file" id="excelFile" accept=".xlsx, .xls">
+  <!-- 필터링 입력창 -->
+  <input type="text" id="searchInput" placeholder="검색어를 입력해봐" onkeyup="filterData()">
+  <!-- 데이터 출력 테이블 -->
+  <table id="excelTable">
+    <thead id="tableHead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <script>
+    let excelData = []; // 엑셀 파일에서 가져온 데이터를 저장
+
+    // 파일 선택 이벤트 처리
+    document.getElementById('excelFile').addEventListener('change', handleFile, false);
+
+    function handleFile(e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        // 첫 번째 시트를 사용 (여러 시트가 있으면 상황에 맞게 수정)
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        // 엑셀 시트를 JSON 형태로 변환 (빈 셀은 빈 문자열로 처리)
+        excelData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        renderTable(excelData);
+      };
+      reader.readAsArrayBuffer(files[0]);
+    }
+
+    // 데이터를 HTML 테이블에 렌더링하는 함수
+    function renderTable(data) {
+      const tableHead = document.getElementById('tableHead');
+      const tableBody = document.getElementById('tableBody');
+      tableHead.innerHTML = '';
+      tableBody.innerHTML = '';
+
+      if (data.length === 0) return;
+
+      // 테이블 헤더 생성 (모든 키를 사용하여 생성함)
+      const headerRow = document.createElement('tr');
+      Object.keys(data[0]).forEach(key => {
+        const th = document.createElement('th');
+        th.textContent = key;
+        headerRow.appendChild(th);
+      });
+      tableHead.appendChild(headerRow);
+
+      // 데이터 행 생성
+      data.forEach(rowData => {
+        const row = document.createElement('tr');
+        Object.keys(data[0]).forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = rowData[key];
+          row.appendChild(td);
+        });
+        tableBody.appendChild(row);
+      });
+    }
+
+    // 검색어에 따른 데이터 필터링 함수
+    function filterData() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filteredData = excelData.filter(row => {
+        return Object.values(row).some(val =>
+          String(val).toLowerCase().includes(query)
+        );
+      });
+      renderTable(filteredData);
+    }
+  </script>
+</body>
+</html>
