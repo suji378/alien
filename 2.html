@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>자료 조회 결과</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    input[type="file"], input[type="text"], select { margin: 10px 10px 10px 0; padding: 5px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; table-layout: auto; }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    td:hover {
+      white-space: normal;
+      background-color: #f9f9f9;
+      position: relative;
+      z-index: 1;
+    }
+    td[title]::after {
+      content: attr(title);
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      top: 100%;
+      left: 0;
+      white-space: pre-wrap;
+      max-width: 400px;
+      display: none;
+    }
+    td:hover[title]::after {
+      display: block;
+    }
+    th { background-color: #f4f4f4; }
+    #table-container { max-height: 600px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h2 id="title">자료 조회 결과</h2>
+  <input type="file" id="file-input" accept=".csv,.xlsx" />
+  <input type="text" id="filter-input" placeholder="검색어 입력" />
+  <select id="filter-jg">
+    <option value="">정관 전체</option>
+    <option value="O">정관 O</option>
+    <option value="X">정관 X</option>
+  </select>
+  <select id="filter-bs">
+    <option value="">사업결산보고서 전체</option>
+    <option value="O">사업결산보고서 O</option>
+    <option value="X">사업결산보고서 X</option>
+  </select>
+  <select id="filter-is">
+    <option value="">이사회활동 전체</option>
+    <option value="O">이사회활동 O</option>
+    <option value="X">이사회활동 X</option>
+  </select>
+  <div id="table-container"></div>
+
+  <script>
+    const fileInput = document.getElementById('file-input');
+    const filterInput = document.getElementById('filter-input');
+    const filterJg = document.getElementById('filter-jg');
+    const filterBs = document.getElementById('filter-bs');
+    const filterIs = document.getElementById('filter-is');
+    const tableContainer = document.getElementById('table-container');
+    const titleElement = document.getElementById('title');
+    let allData = [];
+    let headers = [];
+
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    titleElement.textContent = `자료 조회 결과_${yyyy}.${mm}.${dd}`;
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        headers = Object.keys(jsonData[0] || {});
+        allData = jsonData;
+        applyFilters();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    filterInput.addEventListener('input', applyFilters);
+    filterJg.addEventListener('change', applyFilters);
+    filterBs.addEventListener('change', applyFilters);
+    filterIs.addEventListener('change', applyFilters);
+
+    function applyFilters() {
+      const keyword = filterInput.value.toLowerCase();
+      const jgFilter = filterJg.value;
+      const bsFilter = filterBs.value;
+      const isFilter = filterIs.value;
+
+      const filtered = allData.filter(row => {
+        const matchKeyword = Object.values(row).some(val => String(val).toLowerCase().includes(keyword));
+        const matchJg = jgFilter ? String(row['정관']).toUpperCase() === jgFilter : true;
+        const matchBs = bsFilter ? String(row['사업결산보고서']).toUpperCase() === bsFilter : true;
+        const matchIs = isFilter ? String(row['이사회활동']).toUpperCase() === isFilter : true;
+        return matchKeyword && matchJg && matchBs && matchIs;
+      });
+      renderTable(filtered);
+    }
+
+    function renderTable(data) {
+      if (!data.length) {
+        tableContainer.innerHTML = '<p>데이터 없음</p>';
+        return;
+      }
+      let html = `<p><strong>총 ${data.length}건</strong></p>`;
+      html += '<table><thead><tr><th>순번</th>';
+      headers.forEach(h => { html += `<th>${h}</th>`; });
+      html += '</tr></thead><tbody>';
+      data.forEach((row, index) => {
+        html += '<tr>';
+        html += `<td>${index + 1}</td>`;
+        headers.forEach(h => {
+          const value = row[h] ?? '';
+          html += `<td title="${value}">${value}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      tableContainer.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
